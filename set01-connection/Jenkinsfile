@@ -2,7 +2,7 @@ pipeline {
     agent any
     environment {
         PATH = "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env.PATH}"
-        KUBECONFIG = KUBECONFIG = 'C:\\Users\\NARASIMMAN\\.kube\\config'    }
+        KUBECONFIG = 'C:\\Users\\NARASIMMAN\\.kube\\config'    }
     stages {
         stage('Verify kubectl') {
             steps {
