@@ -1,0 +1,32 @@
+pipeline {
+    agent any
+    environment {
+        PATH = "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env.PATH}"
+        KUBECONFIG = 'C:\\Users\\pugaz\\.kube\\config'
+    }
+    stages {
+        stage('Deploy with 1 replica') {
+            steps {
+                bat 'kubectl apply -f set06-scale/deployment.yaml'
+                bat 'kubectl rollout status deployment/scale-app --timeout=120s'
+                bat 'kubectl get deployment scale-app'
+            }
+        }
+        stage('Scale to 3 replicas') {
+            steps {
+                bat 'kubectl scale deployment/scale-app --replicas=3'
+                bat 'kubectl rollout status deployment/scale-app --timeout=120s'
+            }
+        }
+        stage('Verify') {
+            steps {
+                bat 'kubectl get deployment scale-app'
+                bat 'kubectl get pods -l app=scale-app'
+            }
+        }
+    }
+    post {
+        success { echo 'Pipeline succeeded!' }
+        failure { echo 'Pipeline failed. Check the console output.' }
+    }
+}

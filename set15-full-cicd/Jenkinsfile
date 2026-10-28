@@ -1,0 +1,84 @@
+pipeline {
+    agent any
+    environment {
+        PATH = "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env.PATH}"
+        KUBECONFIG = 'C:\\Users\\pugaz\\.kube\\config'
+        IMAGE_REPO = 'pugazhmsp/lab-fullstack-app'
+    }
+    stages {
+        stage('Checkout from GitHub') {
+            steps {
+                bat 'git log -1 --oneline'
+            }
+        }
+        stage('Test (static content)') {
+            steps {
+                bat 'findstr /C:"TradeLedger" webapp\\index.html'
+                bat 'findstr /C:"<html" webapp\\index.html'
+            }
+        }
+        stage('Build Docker image') {
+            steps {
+                bat 'docker build -t %IMAGE_REPO%:%BUILD_NUMBER% -t %IMAGE_REPO%:latest webapp'
+            }
+        }
+        stage('Smoke test container') {
+            steps {
+                bat 'docker run -d --name smoke-%BUILD_NUMBER% -p 18085:80 %IMAGE_REPO%:%BUILD_NUMBER%'
+                retry(5) {
+                    sleep 2
+                    bat 'curl.exe -s -f http://localhost:18085'
+                }
+            }
+            post {
+                always {
+                    bat 'docker rm -f smoke-%BUILD_NUMBER%'
+                }
+            }
+        }
+        stage('Push to DockerHub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    bat 'echo %DOCKER_PASS%| docker login -u %DOCKER_USER% --password-stdin'
+                    retry(3) {
+                        bat 'docker push %IMAGE_REPO%:%BUILD_NUMBER%'
+                    }
+                    retry(3) {
+                        bat 'docker push %IMAGE_REPO%:latest'
+                    }
+                }
+            }
+        }
+        stage('Deploy to Kubernetes') {
+            steps {
+                bat 'kubectl apply -f set15-full-cicd/k8s.yaml'
+                bat 'kubectl set image deployment/fullstack-web web=%IMAGE_REPO%:%BUILD_NUMBER%'
+                bat 'kubectl rollout status deployment/fullstack-web --timeout=180s'
+            }
+        }
+        stage('Verify') {
+            steps {
+                bat 'kubectl get deployment,pods,svc -l part-of=agile-lab'
+            }
+        }
+        stage('Test Service (in-cluster HTTP check)') {
+            steps {
+                retry(3) {
+                    sleep 3
+                    bat 'kubectl run curl-test-%BUILD_NUMBER% --rm -i --restart=Never --image=curlimages/curl:8.8.0 --command -- curl -s -I http://fullstack-web-svc'
+                }
+            }
+        }
+    }
+    post {
+        success { echo 'Full CI/CD pipeline executed successfully!' }
+        failure {
+            echo 'Pipeline failed - rolling back deployment if it exists'
+            bat 'kubectl rollout undo deployment/fullstack-web || exit /b 0'
+        }
+    }
+}

@@ -1,0 +1,33 @@
+pipeline {
+    agent any
+    environment {
+        PATH = "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env.PATH}"
+        KUBECONFIG = 'C:\\Users\\pugaz\\.kube\\config'
+    }
+    stages {
+        stage('Deploy app and Service') {
+            steps {
+                bat 'kubectl apply -f set05-service/k8s.yaml'
+                bat 'kubectl rollout status deployment/web-svc-app --timeout=120s'
+            }
+        }
+        stage('Verify Service') {
+            steps {
+                bat 'kubectl get svc web-svc'
+                bat 'kubectl get endpoints web-svc'
+            }
+        }
+        stage('Test Service (in-cluster HTTP check)') {
+            steps {
+                retry(3) {
+                    sleep 3
+                    bat 'kubectl run curl-test-%BUILD_NUMBER% --rm -i --restart=Never --image=curlimages/curl:8.8.0 --command -- curl -s -I http://web-svc'
+                }
+            }
+        }
+    }
+    post {
+        success { echo 'Pipeline succeeded!' }
+        failure { echo 'Pipeline failed. Check the console output.' }
+    }
+}

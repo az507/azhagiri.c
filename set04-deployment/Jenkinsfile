@@ -1,0 +1,25 @@
+pipeline {
+    agent any
+    environment {
+        PATH = "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env.PATH}"
+        KUBECONFIG = 'C:\\Users\\pugaz\\.kube\\config'
+    }
+    stages {
+        stage('Deploy web application') {
+            steps {
+                bat 'kubectl apply -f set04-deployment/deployment.yaml'
+            }
+        }
+        stage('Verify rollout') {
+            steps {
+                bat 'kubectl rollout status deployment/web-deploy --timeout=120s'
+                bat 'kubectl get deployment web-deploy'
+                bat 'kubectl get pods -l app=web-deploy'
+            }
+        }
+    }
+    post {
+        success { echo 'Pipeline succeeded!' }
+        failure { echo 'Pipeline failed. Check the console output.' }
+    }
+}

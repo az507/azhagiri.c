@@ -1,0 +1,30 @@
+pipeline {
+    agent any
+    environment {
+        PATH = "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env.PATH}"
+        KUBECONFIG = 'C:\\Users\\pugaz\\.kube\\config'
+    }
+    stages {
+        stage('Create PVC and Pod') {
+            steps {
+                bat 'kubectl apply -f set09-pvc/k8s.yaml'
+            }
+        }
+        stage('Wait until Pod is Ready') {
+            steps {
+                bat 'kubectl wait --for=condition=Ready pod/pvc-pod --timeout=120s'
+            }
+        }
+        stage('Verify volume') {
+            steps {
+                bat 'kubectl get pvc demo-pvc'
+                bat 'kubectl exec pvc-pod -- ls -l /data'
+                bat 'kubectl exec pvc-pod -- cat /data/hello.txt'
+            }
+        }
+    }
+    post {
+        success { echo 'Pipeline succeeded!' }
+        failure { echo 'Pipeline failed. Check the console output.' }
+    }
+}

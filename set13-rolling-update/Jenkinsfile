@@ -1,0 +1,36 @@
+pipeline {
+    agent any
+    environment {
+        PATH = "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env.PATH}"
+        KUBECONFIG = 'C:\\Users\\pugaz\\.kube\\config'
+        NEW_IMAGE = 'nginx:1.25'
+    }
+    stages {
+        stage('Deploy current version') {
+            steps {
+                bat 'kubectl apply -f set13-rolling-update/deployment.yaml'
+                bat 'kubectl rollout status deployment/rolling-app --timeout=120s'
+            }
+        }
+        stage('Rolling update') {
+            steps {
+                bat 'kubectl set image deployment/rolling-app nginx=%NEW_IMAGE%'
+                bat 'kubectl annotate deployment/rolling-app kubernetes.io/change-cause="Update to %NEW_IMAGE%" --overwrite'
+            }
+        }
+        stage('Verify rollout status') {
+            steps {
+                bat 'kubectl rollout status deployment/rolling-app --timeout=120s'
+                bat 'kubectl rollout history deployment/rolling-app'
+                bat 'kubectl get pods -l app=rolling-app'
+            }
+        }
+    }
+    post {
+        success { echo 'Rolling update completed successfully!' }
+        failure {
+            echo 'Rolling update failed - rolling back'
+            bat 'kubectl rollout undo deployment/rolling-app'
+        }
+    }
+}

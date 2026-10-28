@@ -1,0 +1,34 @@
+pipeline {
+    agent any
+    environment {
+        PATH = "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env.PATH}"
+        KUBECONFIG = 'C:\\Users\\pugaz\\.kube\\config'
+    }
+    stages {
+        stage('Remove old Pod') {
+            steps {
+                bat 'kubectl delete pod demo-pod --ignore-not-found'
+            }
+        }
+        stage('Create Pod from YAML') {
+            steps {
+                bat 'kubectl apply -f set03-pod/pod.yaml'
+            }
+        }
+        stage('Wait until Ready') {
+            steps {
+                bat 'kubectl wait --for=condition=Ready pod/demo-pod --timeout=120s'
+            }
+        }
+        stage('Verify') {
+            steps {
+                bat 'kubectl get pod demo-pod -o wide'
+                bat 'kubectl describe pod demo-pod'
+            }
+        }
+    }
+    post {
+        success { echo 'Pipeline succeeded!' }
+        failure { echo 'Pipeline failed. Check the console output.' }
+    }
+}

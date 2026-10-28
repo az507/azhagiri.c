@@ -1,0 +1,37 @@
+pipeline {
+    agent any
+    triggers {
+        // checks GitHub every ~2 minutes; a new commit triggers a build automatically
+        pollSCM('H/2 * * * *')
+    }
+    environment {
+        PATH = "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env.PATH}"
+        KUBECONFIG = 'C:\\Users\\pugaz\\.kube\\config'
+    }
+    stages {
+        stage('Show latest commit') {
+            steps {
+                bat 'git log -1 --oneline'
+            }
+        }
+        stage('Deploy to Kubernetes') {
+            steps {
+                bat 'kubectl apply -f set11-github-auto-deploy/k8s.yaml'
+                bat 'kubectl rollout restart deployment/auto-web'
+                bat 'kubectl rollout status deployment/auto-web --timeout=120s'
+            }
+        }
+        stage('Test Service (in-cluster HTTP check)') {
+            steps {
+                retry(3) {
+                    sleep 3
+                    bat 'kubectl run curl-test-%BUILD_NUMBER% --rm -i --restart=Never --image=curlimages/curl:8.8.0 --command -- curl -s -I http://auto-web-svc'
+                }
+            }
+        }
+    }
+    post {
+        success { echo 'Pipeline succeeded!' }
+        failure { echo 'Pipeline failed. Check the console output.' }
+    }
+}

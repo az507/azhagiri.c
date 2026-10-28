@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-java-app
+  labels:
+    part-of: agile-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sample-java-app
+  template:
+    metadata:
+      labels:
+        app: sample-java-app
+    spec:
+      containers:
+        - name: sample-java-app
+          image: pugazhmsp/rice-traders-app:latest

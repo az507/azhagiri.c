@@ -1,0 +1,45 @@
+pipeline {
+    agent any
+    environment {
+        PATH = "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env.PATH}"
+        KUBECONFIG = 'C:\\Users\\pugaz\\.kube\\config'
+        // bad tag on purpose, so the failure is detected. Change to nginx:1.25 for a successful run
+        NEW_IMAGE = 'nginx:9.99.99-doesnotexist'
+    }
+    stages {
+        stage('Deploy good version') {
+            steps {
+                bat 'kubectl apply -f set14-troubleshoot/deployment.yaml'
+                bat 'kubectl rollout status deployment/trouble-app --timeout=120s'
+            }
+        }
+        stage('Deploy new version') {
+            steps {
+                bat 'kubectl set image deployment/trouble-app nginx=%NEW_IMAGE%'
+            }
+        }
+        stage('Verify and troubleshoot') {
+            steps {
+                script {
+                    def rc = bat(returnStatus: true, script: 'kubectl rollout status deployment/trouble-app --timeout=60s')
+                    if (rc != 0) {
+                        echo 'DEPLOYMENT FAILURE DETECTED - collecting diagnostics'
+                        bat 'kubectl get pods -l app=trouble-app'
+                        bat 'kubectl describe pods -l app=trouble-app'
+                        bat 'kubectl get events --sort-by=.lastTimestamp'
+                        echo 'Rolling back to the last working revision'
+                        bat 'kubectl rollout undo deployment/trouble-app'
+                        bat 'kubectl rollout status deployment/trouble-app --timeout=120s'
+                        unstable('Deployment failed and was rolled back automatically')
+                    } else {
+                        echo 'Deployment is healthy'
+                    }
+                }
+            }
+        }
+    }
+    post {
+        success { echo 'Pipeline succeeded!' }
+        failure { echo 'Pipeline failed. Check the console output.' }
+    }
+}

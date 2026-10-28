@@ -1,0 +1,57 @@
+pipeline {
+    agent any
+    environment {
+        PATH = "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env.PATH}"
+        KUBECONFIG = 'C:\\Users\\pugaz\\.kube\\config'
+        IMAGE_REPO = 'pugazhmsp/lab-web-app'
+    }
+    stages {
+        stage('Build Docker image') {
+            steps {
+                bat 'docker build -t %IMAGE_REPO%:%BUILD_NUMBER% -t %IMAGE_REPO%:latest webapp'
+            }
+        }
+        stage('Push to DockerHub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    bat 'echo %DOCKER_PASS%| docker login -u %DOCKER_USER% --password-stdin'
+                    retry(3) {
+                        bat 'docker push %IMAGE_REPO%:%BUILD_NUMBER%'
+                    }
+                    retry(3) {
+                        bat 'docker push %IMAGE_REPO%:latest'
+                    }
+                }
+            }
+        }
+        stage('Deploy to Kubernetes') {
+            steps {
+                bat 'kubectl apply -f set12-docker-build-deploy/k8s.yaml'
+                bat 'kubectl set image deployment/lab-web web=%IMAGE_REPO%:%BUILD_NUMBER%'
+                bat 'kubectl rollout status deployment/lab-web --timeout=180s'
+            }
+        }
+        stage('Verify') {
+            steps {
+                bat 'kubectl get pods -l app=lab-web'
+                bat 'kubectl get svc lab-web-svc'
+            }
+        }
+        stage('Test Service (in-cluster HTTP check)') {
+            steps {
+                retry(3) {
+                    sleep 3
+                    bat 'kubectl run curl-test-%BUILD_NUMBER% --rm -i --restart=Never --image=curlimages/curl:8.8.0 --command -- curl -s -I http://lab-web-svc'
+                }
+            }
+        }
+    }
+    post {
+        success { echo 'Pipeline succeeded!' }
+        failure { echo 'Pipeline failed. Check the console output.' }
+    }
+}

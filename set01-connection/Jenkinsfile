@@ -1,0 +1,31 @@
+pipeline {
+    agent any
+    environment {
+        PATH = "C:\\Program Files\\Docker\\Docker\\resources\\bin;${env.PATH}"
+        KUBECONFIG = KUBECONFIG = 'C:\\Users\\NARASIMMAN\\.kube\\config'    }
+    stages {
+        stage('Verify kubectl') {
+            steps {
+                bat 'kubectl version --client'
+            }
+        }
+        stage('Check cluster connection') {
+            steps {
+                bat 'kubectl config current-context'
+                bat 'kubectl cluster-info'
+                bat 'kubectl get nodes'
+            }
+        }
+        stage('Verify API access') {
+            steps {
+                bat 'kubectl get namespaces'
+                bat 'kubectl auth can-i create deployments'
+                bat 'kubectl get pods -A'
+            }
+        }
+    }
+    post {
+        success { echo 'Pipeline succeeded!' }
+        failure { echo 'Pipeline failed. Check the console output.' }
+    }
+}
